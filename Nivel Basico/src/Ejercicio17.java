@@ -3,9 +3,7 @@ import java.util.Scanner;
 public class Ejercicio17 {
 
 	public static void main(String[] args) {
-		// 17) Crear un programa que resuelva cualquier ecuación de segundo grado ax2-bx = c. Por
-		//tanto, se debe pedir al usuario que introduzca los valores a, b y c, y el programa
-		//indicará las posibles raíces solución.
+		
 
 		Scanner sc = new Scanner(System.in);
 

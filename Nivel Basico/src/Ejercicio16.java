@@ -2,8 +2,6 @@ import java.util.Scanner;
 public class Ejercicio16 {
 
 	public static void main(String[] args) {
-		// 16) Crear un programa que dada una hora en formato hh:mm:ss determine e informe cual
-		//será el tiempo dentro de n segundos. La cantidad de segundos debe ser indicada por el usuario.
 		
 		Scanner sc = new Scanner(System.in);
 		
