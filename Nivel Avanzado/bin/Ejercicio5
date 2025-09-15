@@ -1,0 +1,7 @@
+En Java, al desplazar un `int` el número de posiciones se toma módulo 32. Por eso `-2` equivale a 30 posiciones.
+Además, al desplazar a la izquierda, entran (ceros por la derecha) y lo que sale por la izquierda (se pierde).
+
+Aplicando eso:
+
+* {2 << -2} → {2 << 30} → queda el bit más alto encendido → `0x80000000` → -2147483648.
+* {12 << -2} → {12 << 30} → todos los bits de 12 salen del rango de 32 bits → 0.
