@@ -12,7 +12,7 @@ public class Ejercicio1 {
 		
 		float pl = (peso * 17) / 100;
 		
-		System.out.println("El peso lunar es: " + pl);
+		System.out.println("El peso lunar es de: " + pl);
 	}
 
 }
