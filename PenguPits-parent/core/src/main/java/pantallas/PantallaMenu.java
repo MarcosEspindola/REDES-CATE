@@ -1,19 +1,12 @@
 package pantallas;
 
-import java.util.IllegalFormatCodePointException;
-
-import javax.naming.ConfigurationException;
-
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
-
 import elementos.Imagen;
 import utiles.Config;
 import utiles.Entradas;
@@ -126,16 +119,13 @@ public class PantallaMenu implements Screen {
 		
 
 		if(Entradas.mouseX>120 && Entradas.mouseX<460 && Entradas.mouseY<449 && Entradas.mouseY>385 ) {
-			System.out.println("bola");
 			opc = 1;
 		}
 		
 		if(Entradas.mouseX>120 && Entradas.mouseX<339 && Entradas.mouseY<364 && Entradas.mouseY>300 ) {
-			System.out.println("sola");
 			opc = 2;
 		}
 		if(Entradas.mouseX>120 && Entradas.mouseX<230 && Entradas.mouseY<286 && Entradas.mouseY>223) {
-			System.out.println("cola");
 			opc = 3;
 		}
 	}

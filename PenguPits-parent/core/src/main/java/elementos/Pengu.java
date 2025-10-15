@@ -1,93 +1,184 @@
 package elementos;
 
-import java.util.Iterator;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
-import com.badlogic.gdx.graphics.g2d.Sprite;
-import com.badlogic.gdx.graphics.g2d.TextureRegion;
-
-import utiles.Entradas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;    
 import utiles.Render;
 
 public class Pengu {
-	Imagen spr;
+	
+	// --- CONSTANTES COMPARTIDAS (No necesitan ser duplicadas) ---
+	private Animation<TextureRegion> animation;
+	private float tiempo;
+	private TextureRegion[] regionsMovimiento;
+	private TextureRegion frameActual;
+	private Texture imagen;
+	
+	// --- CONSTANTES COMPARTIDAS (No necesitan ser duplicadas) ---
+	private final float GRAVEDAD = -0.8f; 
+	private final float IMPULSO_SALTO = 15f; 
+	private final float ALTURA_PISO = 120; // Para mayor claridad
+	private final float ALTURA_TECHO = 600; // Para mayor claridad
+	   
+	    
+		// --- VARIABLES DE ESTADO INDEPENDIENTES ---
+		
+		// Orientación (Flip del Sprite)
+		private boolean mirandoDerecha1 = true; 
+		private boolean mirandoDerecha2 = false; 
+		
+		// Salto y Gravedad (Velocidad Vertical)
+		private float velocidadY1 = 0; 
+		private float velocidadY2 = 0; 
+		
+		// Doble Salto (Contador)
+		private int saltosRestantes1 = 2; 
+		private int saltosRestantes2 = 2; 
 	
 	public float alto,ancho;
-	public float x, y ,x2, y2, tiempo;
+	public float x, y ,x2, y2;
 	int vel = 2, salto = 17;
 	
 	
 	public Pengu(float x, float y,int pj){
 		
 		if(pj==1) { 
-			
-			spr = new Imagen("pengu/pengu1.png");
-			setX(x);
-			setY(y);
-		}else{
-			spr = new Imagen("pengu/pengu2.png");
-			setX2(x);
-			setY2(y);
+			imagen = new Texture(Gdx.files.internal("pengu/pengu1spr.png"));
+			this.x = x;
+			this.y = y;
 		}
-		spr.setSize(200, 200);
+		if(pj==2) { 
+			imagen = new Texture(Gdx.files.internal("pengu/pengu2spr.png"));
+			this.x2 = x;
+			this.y2 = y;
+		}
+		
+		TextureRegion[][] tmp = TextureRegion.split(imagen, imagen.getWidth()/5, imagen.getHeight());
+		regionsMovimiento = new TextureRegion[5];
+		
+		for(int i=0; i<5;i++) regionsMovimiento[i]= tmp[0][i];
+		
+		animation = new Animation<TextureRegion>(0.1f,regionsMovimiento);
+		
+	}
+	
+	public void actualizar(int pj) {
+	    
+		boolean mirandoDerecha;
+	    float velocidadY;
+	    int saltosRestantes;
+	    float currentX, currentY;
+	    int keyMoveRight, keyMoveLeft, keyJump;
 
-		
+	    if (pj == 1) {
+	        mirandoDerecha = this.mirandoDerecha1;
+	        velocidadY = this.velocidadY1;
+	        saltosRestantes = this.saltosRestantes1;
+	        currentX = this.x; currentY = this.y; // <--- Usa x, y
+	        keyMoveRight = Keys.D; keyMoveLeft = Keys.A; keyJump = Keys.W;
+	    } else { // pj == 2
+	        mirandoDerecha = this.mirandoDerecha2;
+	        velocidadY = this.velocidadY2;
+	        saltosRestantes = this.saltosRestantes2;
+	        currentX = this.x2; currentY = this.y2; // <--- Usa x2, y2
+	        keyMoveRight = Keys.L; keyMoveLeft = Keys.J; keyJump = Keys.I;
+	    }
+
+	    // Detección de movimiento para controlar el avance del tiempo de animación
+	    boolean moviendoseHorizontalmente = Gdx.input.isKeyPressed(keyMoveRight) || Gdx.input.isKeyPressed(keyMoveLeft);
+	    boolean estaMoviendose = moviendoseHorizontalmente || (velocidadY != 0);
+
+
+	    // ----------------------------------------------------
+	    // 2. CONTROL DE TIEMPO DE ANIMACIÓN (Congelamiento)
+	    // ----------------------------------------------------
+	    // Solo avanza el tiempo si el personaje está en movimiento o en el aire.
+	    if (estaMoviendose) {
+	        tiempo += Gdx.graphics.getDeltaTime();
+	    }
+	    
+	    // ----------------------------------------------------
+	    // 3. LÓGICA DE MOVIMIENTO Y SALTO (Unificada)
+	    // ----------------------------------------------------
+	    
+	    // --- Movimiento Horizontal y Orientación ---
+	    if (Gdx.input.isKeyPressed(keyMoveRight)) {
+	        mirandoDerecha = true;
+	        currentX += vel;
+	        if (currentX > 1100) currentX = 1100;
+
+	    } else if (Gdx.input.isKeyPressed(keyMoveLeft)) {
+	        mirandoDerecha = false;
+	        currentX -= vel;
+	        if (currentX < 0) currentX = 0;
+	    }
+
+	    // --- Salto/Doble Salto y Gravedad ---
+	    if (Gdx.input.isKeyJustPressed(keyJump)) { 
+	        if (saltosRestantes > 0) {
+	            velocidadY = IMPULSO_SALTO;
+	            saltosRestantes--;
+	        }
+	    }
+
+	    // Aplicar Gravedad
+	    velocidadY += GRAVEDAD;
+
+	    // Aplicar Movimiento Vertical
+	    currentY += velocidadY;
+
+	    // Detección de Suelo y Reset de Saltos
+	    if (currentY <= ALTURA_PISO) {
+	        currentY = ALTURA_PISO;
+	        velocidadY = 0;
+	        saltosRestantes = 2;
+	    }
+
+	    // Restricción de Techo
+	    if (currentY > ALTURA_TECHO) {
+	        currentY = ALTURA_TECHO;
+	        if (velocidadY > 0) {
+	            velocidadY = 0;
+	        }
+	    }
+
+	    // ----------------------------------------------------
+	    // 4. GUARDAR ESTADOS GLOBALES (Actualiza las variables de clase)
+	    // ----------------------------------------------------
+	    
+	    if (pj == 1) {
+	        setX(currentX); setY(currentY);
+	        this.mirandoDerecha1 = mirandoDerecha;
+	        this.velocidadY1 = velocidadY;
+	        this.saltosRestantes1 = saltosRestantes;
+	    } else {
+	        setX2(currentX); setY2(currentY);
+	        this.mirandoDerecha2 = mirandoDerecha;
+	        this.velocidadY2 = velocidadY;
+	        this.saltosRestantes2 = saltosRestantes;
+	    }
+
+	    // ----------------------------------------------------
+	    // 5. DIBUJADO Y FLIP
+	    // ----------------------------------------------------
+
+	    // Obtener el frame: Si 'tiempo' está congelado, devuelve el último frame.
+	    TextureRegion frameActual = animation.getKeyFrame(tiempo, true);
+	    
+	    // Invertir el sprite horizontalmente (FLIP)
+	    if (!mirandoDerecha && !frameActual.isFlipX()) {
+	        frameActual.flip(true, false); 
+	    } else if (mirandoDerecha && frameActual.isFlipX()) {
+	        frameActual.flip(true, false);
+	    }
+	    
+	    // Dibuja SIEMPRE el frameActual (el sprite estático ahora es el frame congelado)
+	    Render.batch.draw(frameActual, currentX, currentY);
 	}
 	
-	
-	
-	public void dibujar(){
-		spr.dibujar();
-	}
-	
-	public void actualizar(int pj){
-	
-		if(pj==1){
-		if(Gdx.input.isKeyPressed(Keys.D)) {
-			setX(getX()+vel);
-			if(getX()>1200)setX(1200);
-		}
-		
-		if(Gdx.input.isKeyPressed(Keys.SPACE)) {
-			setY(getY()+salto);
-			if(getY2()>600)setY2(600);
-		}
-		
-		if(Gdx.input.isKeyPressed(Keys.A)) {
-			setX(getX()-vel);
-			if(getX()<0)setX(0);
-			
-		}
-		if(getY()>120) {setY(getY()-5);}
-		
-		}
-		
-		if(pj==2){
-			if(Gdx.input.isKeyPressed(Keys.L)) {
-				setX2(getX2()+vel);
-				if(getX2()>1200)setX2(1200);
-			}
-			
-			if(Gdx.input.isKeyPressed(Keys.J)) {
-				setX2(getX2()-vel);
-				if(getX2()<0)setX2(0);
-				
-			}
-			if(Gdx.input.isKeyPressed(Keys.I)) {
-				setY2(getY2()+salto);
-				System.out.println(getY2());
-				if(getY2()>600)setY2(600);
-				
-			}
-			if(getY2()>120) setY2(getY2()-5);
-			}
-		
-		
-			
-	}
 	
 	public float getX(){
 		return x;
@@ -107,22 +198,18 @@ public class Pengu {
 	
 	public void setX(float x){
 		this.x = x;
-		spr.setPosition(x, y);
 	}
 	
 	public void setY(float y){
 		this.y = y;
-		spr.setPosition(x, y);
 	}
 	
 	public void setX2(float x2){
 		this.x2 = x2;
-		spr.setPosition(x2, y2);
 	}
 	
 	public void setY2(float y2){
 		this.y2 = y2;
-		spr.setPosition(x2, y2);
 	}
 	
 	
