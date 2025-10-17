@@ -6,6 +6,7 @@ import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 
 import utiles.Render;
@@ -39,6 +40,9 @@ public class Pengu extends Actor {
 		// Doble Salto (Contador)
 		private int saltosRestantes1 = 2; 
 		private int saltosRestantes2 = 2; 
+		
+		private Rectangle colision1; 
+	    private Rectangle colision2;
 	
 	public float alto,ancho;
 	public float x, y ,x2, y2;
@@ -49,11 +53,13 @@ public class Pengu extends Actor {
 		
 		if(pj==1) { 
 			imagen = new Texture(Gdx.files.internal("pengu/pengu1spr.png"));
+			colision1 = new Rectangle(x, y, 100, 120);
 			this.x = x;
 			this.y = y;
 		}
 		if(pj==2) { 
 			imagen = new Texture(Gdx.files.internal("pengu/pengu2spr.png"));
+			colision2 = new Rectangle(x, y, 100, 120);
 			this.x2 = x;
 			this.y2 = y;
 		}
@@ -80,12 +86,14 @@ public class Pengu extends Actor {
 	        velocidadY = this.velocidadY1;
 	        saltosRestantes = this.saltosRestantes1;
 	        currentX = this.x; currentY = this.y; // <--- Usa x, y
+	        colision1.setPosition(currentX, currentY);
 	        keyMoveRight = Keys.D; keyMoveLeft = Keys.A; keyJump = Keys.W;
 	    } else { // pj == 2
 	        mirandoDerecha = this.mirandoDerecha2;
 	        velocidadY = this.velocidadY2;
 	        saltosRestantes = this.saltosRestantes2;
 	        currentX = this.x2; currentY = this.y2; // <--- Usa x2, y2
+	        colision2.setPosition(currentX, currentY);
 	        keyMoveRight = Keys.L; keyMoveLeft = Keys.J; keyJump = Keys.I;
 	    }
 
@@ -181,6 +189,17 @@ public class Pengu extends Actor {
 	    Render.batch.draw(frameActual, currentX, currentY);
 	}
 	
+	public Rectangle getColision(int pj) {
+        return (pj == 1) ? colision1 : colision2;
+    }
+	
+	public boolean isMirandoDerecha(int pj) {
+	    if (pj == 1) {
+	        return mirandoDerecha1;
+	    } else {
+	        return mirandoDerecha2;
+	    }
+	}
 	
 	public float getX(){
 		return x;

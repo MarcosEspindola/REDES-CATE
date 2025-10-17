@@ -37,8 +37,8 @@ public class Hud {
         }
 
        
-        actual1 = 0;
-        actual2 = 0;
+        actual1 = 5;
+        actual2 = 5;
     }
 
    
@@ -50,25 +50,25 @@ public class Hud {
     
     public void actualizarHud(int vida,int vida2) {
        
-        if (vida == 0) {
+        if (vida == 5) {
         	actual1 = 0; 
-        } else if (vida == 1) {
+        } else if (vida == 4) {
         	actual1 = 1; 
-        } else if (vida == 2) {
-        	actual1 = 2; 
         } else if (vida == 3) {
+        	actual1 = 2; 
+        } else if (vida == 2) {
         	actual1 = 3; 
         } else {
         	actual1 = 4;
         }
         
-        if (vida2 == 0) {
+        if (vida2 == 5) {
         	actual2 = 0; 
-        } else if (vida2 == 1) {
+        } else if (vida2 == 4) {
         	actual2 = 1; 
-        } else if (vida2 == 2) {
-        	actual2 = 2; 
         } else if (vida2 == 3) {
+        	actual2 = 2; 
+        } else if (vida2 == 2) {
         	actual2 = 3; 
         } else {
         	actual2 = 4;
