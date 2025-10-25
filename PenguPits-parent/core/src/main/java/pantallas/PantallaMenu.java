@@ -52,7 +52,7 @@ public class PantallaMenu implements Screen {
 		t.dibujarTexto("Iniciar Partida",120, 285+160);
 		t2.dibujarTexto("Opciones",120, 285+80);
 		t3.dibujarTexto("Salir",120, 285);
-		TEST.dibujarTexto("CORDS X: " + Entradas.mouseX + " CORDS Y: " + (Entradas.mouseY) ,120, 100);	
+		TEST.dibujarTexto("CORDS : " + Entradas.mouseX + " CORDS Y: " + (Entradas.mouseY) ,120, 100);	
 		Render.batch.end();
 		
 		sr.begin(ShapeType.Line);

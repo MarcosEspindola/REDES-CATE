@@ -3,7 +3,8 @@ package utiles;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import io.github.some_example_name.Main;
+
+import io.github.some_example_name.client.Main;
 
 public class Render {
 	public static SpriteBatch batch;
