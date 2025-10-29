@@ -55,8 +55,7 @@ public class PantallaJuego implements Screen {
 		fondo.dibujar();
 		hud.actualizarHud(vida,vida2);
 		hud.dibujarHud();
-		pengu2.actualizar(2);
-		pengu.actualizar(1);
+		
 			
 			
 			

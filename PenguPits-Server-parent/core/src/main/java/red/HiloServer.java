@@ -27,9 +27,9 @@ public class HiloServer extends Thread {
     private int p2Vida = 5;
     
     // Constantes para simulación de física en el servidor
-    private final float VELOCIDAD_MOVIMIENTO = 100; // Velocidad horizontal en píxeles/segundo
-    private final float IMPULSO_SALTO = 600f; // Impulso vertical inicial
-    private final float GRAVEDAD = -500f; // Aceleración de la gravedad (píxeles/segundo^2)
+    private final float VELOCIDAD_MOVIMIENTO = 2; // Velocidad horizontal en píxeles/segundo
+    private final float IMPULSO_SALTO = 15f; // Impulso vertical inicial
+    private final float GRAVEDAD = -0.7f; // Aceleración de la gravedad (píxeles/segundo^2)
     private final float POSICION_PISO = 120;
     
     // Variables para simular la física (el servidor es el dueño de la lógica)
@@ -40,14 +40,12 @@ public class HiloServer extends Thread {
     private final float LIMITE_DERECHO = 1100;
     private final float LIMITE_IZQUIERDO = 0;
     
-    // Frecuencia de sincronización (en milisegundos)
-    private final long SYNC_INTERVAL_MS = 30; // Sincroniza cada 30ms (aprox. 33 FPS)
     // -----------------------------------------------------------------
 	
 	public HiloServer() {
 		// Puerto 9007, debe coincidir con el cliente
 		try {
-			conexion = new DatagramSocket(9007); 
+			conexion = new DatagramSocket(9008); 
 		} catch (SocketException e) {
 			e.printStackTrace();
             System.err.println("ERROR: El puerto 9007 está en uso. Reinicie o cambie de puerto.");
@@ -109,12 +107,8 @@ public class HiloServer extends Thread {
                     e.printStackTrace();
                 }
 			}
-            
-            // 3. Sincronizar estado a intervalos regulares (Mejora la fluidez, Problema 2 y 4)
-            if (Global.empieza && (System.currentTimeMillis() - lastSync) >= SYNC_INTERVAL_MS) {
-                sincronizarEstado();
-                lastSync = System.currentTimeMillis();
-            }
+			sincronizarEstado();
+
             
 		}while(!fin);
         
@@ -130,7 +124,7 @@ public class HiloServer extends Thread {
     private void aplicarGravedad(float delta) {
         
         // J1: Aplicar velocidad y gravedad
-        p1Y += p1VelocidadY * delta; 
+        p1Y += p1VelocidadY; 
         p1VelocidadY += GRAVEDAD * delta;
         
         // Detección de piso (Problema 4)
@@ -143,8 +137,8 @@ public class HiloServer extends Thread {
         }
         
         // J2: Aplicar velocidad y gravedad
-        p2Y += p2VelocidadY * delta;
-        p2VelocidadY += GRAVEDAD * delta;
+        p2Y += p2VelocidadY;
+        p2VelocidadY += GRAVEDAD;
         
         // Detección de piso (Problema 4)
         if (p2Y <= POSICION_PISO) {
@@ -223,9 +217,9 @@ public class HiloServer extends Thread {
         
         // El movimiento se calcula en píxeles/segundo * 0.05 (aproximadamente 3 veces por segundo)
         if (comando.equals("MOV_D")) {
-            x += VELOCIDAD_MOVIMIENTO * 0.05f; 
+            x += VELOCIDAD_MOVIMIENTO; 
         } else if (comando.equals("MOV_A")) {
-            x -= VELOCIDAD_MOVIMIENTO * 0.05f;
+            x -= VELOCIDAD_MOVIMIENTO;
         }
 
         // Restricciones de borde

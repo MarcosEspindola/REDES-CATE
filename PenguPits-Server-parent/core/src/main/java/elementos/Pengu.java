@@ -187,7 +187,7 @@ public class Pengu extends Actor {
 	    
 	    // Dibuja SIEMPRE el frameActual (el sprite estático ahora es el frame congelado)
 	    Render.batch.draw(frameActual, currentX, currentY);
-	}
+	} 
 	
 	public Rectangle getColision(int pj) {
         return (pj == 1) ? colision1 : colision2;
