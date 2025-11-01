@@ -9,8 +9,9 @@ public class Imagen {
 	private Texture t;
 	private Sprite s;
 	
-	public Imagen(String ruta) {
-		t = new Texture (ruta);
+    // *** CONSTRUCTOR CORREGIDO: ACEPTA UN OBJETO TEXTURE ***
+	public Imagen(Texture texture) {
+		this.t = texture; // Asigna la textura ya cargada
 		s = new Sprite(t);
 	}
 	
@@ -27,6 +28,16 @@ public class Imagen {
 		s.setPosition(x, y);
 		
 	}
-	}
+    
+    // El método dispose YA NO debe liberar la textura, 
+    // pues esta es compartida (Global.TEXTURA_BALA).
+    // Para LibGDX, solo liberamos recursos que no compartimos.
+    // Sin embargo, si quieres que 'Imagen' sea liberable, simplemente no llamas
+    // a t.dispose() aquí. 
+    // Para esta implementación, dejaremos este método vacío para no causar problemas:
+    public void dispose() {
+        // No hace nada. La liberación se hace en PantallaJuego.dispose()
+    }
+}
 
 	

@@ -39,14 +39,14 @@ public class Pengu extends Actor {
 		
 		if(pj==1) { 
 			imagen = new Texture("pengu/pengu1spr.png");
-			colision1 = new Rectangle(x, y, 100, 120);
+			colision1 = new Rectangle(x, y, 210, 210);
 			this.x = x;
 			this.y = y;
             this.lastX1 = x;
 		}
 		if(pj==2) { 
 			imagen = new Texture("pengu/pengu2spr.png");
-			colision2 = new Rectangle(x, y, 100, 120);
+			colision2 = new Rectangle(x, y, 210, 210);
 			this.x2 = x;
 			this.y2 = y;
             this.lastX2 = x;
@@ -57,48 +57,51 @@ public class Pengu extends Actor {
 		
 		for(int i=0; i<5;i++) regionsMovimiento[i]= tmp[0][i];
 		
-		animation = new Animation<TextureRegion>(0.1f,regionsMovimiento);
+		animation = new Animation<TextureRegion>(0.1f, regionsMovimiento);
 		
 	}
 	
 	public void actualizar(int pj) {
 	    
-		float currentX, currentY;
-        boolean mirandoDerecha;
+	    float currentX, currentY;
+	    boolean mirandoDerecha;
 
 	    if (pj == 1) {
 	        currentX = this.x; currentY = this.y; 
-            mirandoDerecha = this.mirandoDerecha1;
+	        mirandoDerecha = this.mirandoDerecha1;
 	        colision1.setPosition(currentX, currentY);
 	    } else { // pj == 2
 	        currentX = this.x2; currentY = this.y2; 
-            mirandoDerecha = this.mirandoDerecha2;
+	        mirandoDerecha = this.mirandoDerecha2;
 	        colision2.setPosition(currentX, currentY);
 	    }
-        
-        // --- 1. LÓGICA DE ANIMACIÓN (CRÍTICO: Depende del cambio de posición) ---
-        boolean isMoving = false;
-        if (pj == 1) {
-            isMoving = (currentX != lastX1);
-            lastX1 = currentX; // Guarda la nueva posición
-        } else {
-            isMoving = (currentX != lastX2);
-            lastX2 = currentX; // Guarda la nueva posición
-        }
-
-	    // Solo avanza el tiempo de animación si la posición X ha cambiado (hay movimiento)
-	    if (isMoving) {
-	        tiempo += com.badlogic.gdx.Gdx.graphics.getDeltaTime();
+	    
+	    // --- 1. LÓGICA DE ANIMACIÓN ---
+	    final float EPSILON = 0.01f;
+	    final float ANIMATION_SPEED_FACTOR = 1.5f;
+	    boolean isMoving = false;
+	    
+	    if (pj == 1) {
+	        isMoving = (Math.abs(currentX - lastX1) > EPSILON); 
+	        lastX1 = currentX; 
 	    } else {
-            // Congela el frame de la animación (usamos el primer frame, índice 0)
-	        tiempo = 0.1f; // Pequeño valor para asegurar quegetKeyFrame(tiempo) devuelva un frame inicial.
+	        isMoving = (Math.abs(currentX - lastX2) > EPSILON);
+	        lastX2 = currentX; 
+	    }
+
+	    // Solo avanza el tiempo de animación si hay movimiento
+	    if (isMoving) {
+	        // Multiplicar por el factor para que la animación se vea fluida
+	        tiempo += com.badlogic.gdx.Gdx.graphics.getDeltaTime() * ANIMATION_SPEED_FACTOR;
+	    } else {
+	        // Al estar parado, reiniciamos el tiempo a 0.0f
+	        tiempo = 0f; 
 	    }
 	    
-        // --------------------------------------------------------------------
+	    // --------------------------------------------------------------------
 	    // 2. DIBUJADO Y FLIP
 	    // --------------------------------------------------------------------
 
-	    // Obtener el frame
 	    TextureRegion frameActual = animation.getKeyFrame(tiempo, true);
 	    
 	    // Invertir el sprite horizontalmente (FLIP)
@@ -108,7 +111,6 @@ public class Pengu extends Actor {
 	        frameActual.flip(true, false);
 	    }
 	    
-	    // Dibuja el frame
 	    Render.batch.draw(frameActual, currentX, currentY);
 	}
 	
@@ -121,8 +123,6 @@ public class Pengu extends Actor {
         }
     }
     
-    // ... (El resto de getters/setters son necesarios para la red)
-	
 	public Rectangle getColision(int pj) {
         return (pj == 1) ? colision1 : colision2;
     }
@@ -154,7 +154,7 @@ public class Pengu extends Actor {
 	public void setX(float x){
 		this.x = x;
 	}
-	
+	 
 	public void setY(float y){
 		this.y = y;
 	}
@@ -166,4 +166,12 @@ public class Pengu extends Actor {
 	public void setY2(float y2){
 		this.y2 = y2;
 	}
+
+    @Override
+    public void dispose() {
+        // CORRECCIÓN: Liberar la textura del personaje al cerrar
+        if (imagen != null) {
+            imagen.dispose();
+        }
+    }
 }

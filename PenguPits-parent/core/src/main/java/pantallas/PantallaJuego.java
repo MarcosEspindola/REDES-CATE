@@ -5,183 +5,243 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture; // Importación necesaria para la carga global
 import com.badlogic.gdx.utils.Array;
-
 import elementos.Bala;
 import elementos.Imagen;
 import elementos.Pengu;
 import escenas.Hud;
-import red.HiloCliente;
+import red.HiloCliente; // Importación crítica
 import utiles.Config;
 import utiles.Global;
 import utiles.Render;
+import java.util.HashMap;
+import java.util.Map;
 
 public class PantallaJuego implements Screen {
 	Imagen fondo;
 	Hud hud;
-	Pengu pengu,pengu2;
-	Array<Bala> balas;
-	Config t;
+	Pengu pengu,pengu2; // Jugador 1 y Jugador 2
 	
-	private HiloCliente hc;
-	private int miJugadorID = 0; // 0 = no asignado, 1 = J1, 2 = J2
-	
-	int vida2 = 5;
-	int vida = 5;
-	int piso = 122;
-	
-    // Referencia de la posición X anterior para calcular la dirección del movimiento
-    private float lastReportedX1 = 100;
-    private float lastReportedX2 = 1000;
-    
-    // Constructor (El Main debería llamar a este para pasar el HiloCliente)
-    public PantallaJuego(HiloCliente cliente) {
-        this.hc = cliente;
-    }
-    
-    // Constructor sin argumentos (Usado si la inicialización se hace en show)
-    public PantallaJuego() {}
+	// Variables de red y estado
+	private HiloCliente hc; // El hilo del cliente para comunicación
+    private int jugadorID = 0; // ID asignado por el servidor (1 o 2)
 
+	// Balas gestionadas por el cliente
+	private Array<Bala> balas = new Array<>(); 
+	private Map<Integer, Bala> balasMapa = new HashMap<>(); // Para acceso rápido por ID
+	
+	Config t;
+	int vida2 = 5; // Vida de J2 (Actualizada por el servidor)
+	int vida = 5;  // Vida de J1 (Actualizada por el servidor)
+	int piso = 120;
+	
+	@Override
 	public void show() {
-		fondo = new Imagen("FondoJuego1.png");
+		// 1. CARGA DE FONDOS (usando las texturas pre-cargadas en Main)
+		// Nota: Global.TEXTURA_FONDO_MENU se usa para el fondo del menú. 
+		// Asumo que tienes una textura para el fondo de juego (ej: Global.TEXTURA_FONDO_JUEGO)
+		// Si 'FondoJuego1.png' no es global, debemos cargarlo aquí. 
+		// Para simplicidad, carguemos el fondo aquí, ya que es un recurso de pantalla.
+		Texture tFondo = new Texture("FondoJuego1.png");
+		fondo = new Imagen(tFondo);
 		fondo.setSize(Config.ANCHO, Config.ALTO);
+		
 		hud = new Hud();
-		pengu = new Pengu(100, piso, 1);
+		
+		// 2. Inicialización de jugadores
+		pengu = new Pengu(100, piso, 1); 
 		pengu2 = new Pengu(1000, piso, 2);
-		balas = new Array<>();
+		
 		t = new Config();
 		t.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
-        
-        // Inicializar y asignar el hilo cliente
-        if (hc == null) {
-            hc = new HiloCliente();
-        }
-        
-        // CRÍTICO: Asignar esta pantalla al cliente para que pueda actualizarla
-        hc.setPantallaJuego(this); 
-        
-        if (!hc.isAlive()) {
-		    hc.start();
-        }
+		
+		// 3. INICIALIZAR HILO CLIENTE Y CONECTAR
+		// *** IMPORTANTE: Se elimina HiloServer y la carga de Global.TEXTURA_BALA. ***
+		hc = new HiloCliente(); 
+		hc.setPantallaJuego(this); // Darle la referencia a esta pantalla
+		hc.start();
 	}
 
 	@Override
 	public void render(float delta) {
 		Render.limpiarPantalla();
 		
-		if (hc != null && Global.empieza) {
-		    manejarInputRed(); // Enviar comandos al servidor
-		}
-
-		if(!Global.empieza) {
-			Render.batch.begin();
+		// 1. MANEJO DE ENTRADA Y ENVÍO DE COMANDOS
+	    manejarInput(); 
+		
+		// 2. DIBUJADO Y ACTUALIZACIÓN VISUAL (TODO DENTRO DE UN SOLO BEGIN/END)
+		Render.batch.begin();
+		
+		if (!Global.empieza) {
+			// Lógica de espera (si el juego no ha empezado)
 			fondo.dibujar();
-			t.dibujarTexto("Esperando Jugadores", 100, 100);
-			Render.batch.end();
+			t.dibujarTexto("Esperando Jugadores (ID: " + jugadorID + ")", 100, 100);
 		} else {
-		    Render.batch.begin();
-		    fondo.dibujar();
-		    hud.actualizarHud(vida,vida2);
-		    hud.dibujarHud();
-		    
-		    // Los Pengu ahora solo se dibujan, el servidor controla la posición.
-		    pengu.actualizar(1); 
-		    pengu2.actualizar(2); 
-		    
-		    // La lógica de balas y colisión DEBE estar en el servidor.
-		    
-		    // Reinicio (solo para pruebas)
-		    if(Gdx.input.isKeyPressed(Keys.T)) {
-                if (hc != null) { hc.enviarMensaje("RESET:VIDA"); }
-            }
-            
-		    Render.batch.end();
+			// Lógica de juego
+			fondo.dibujar();
+			
+			// Dibujar HUD
+			hud.actualizarHud(vida, vida2);
+			hud.dibujarHud();
+			
+			// Dibujar y actualizar la animación de los pingüinos 
+			pengu.actualizar(1); 
+			pengu2.actualizar(2);
+			
+			// Dibujar las balas
+			for (Bala b : balas) { 
+			    b.actualizar(); 
+			    b.dibujarBala();
+			}
 		}
+		
+		// El batch termina una sola vez. (Corrección del error SpriteBatch.end/begin)
+		Render.batch.end();
 	}
 	
-    /**
-     * Envía las entradas del teclado como comandos al servidor.
-     */
-	private void manejarInputRed() {
-        // Obtenemos la ID de la tecla para el jugador actual
-        int keyMoveRight = (miJugadorID == 1) ? Keys.D : Keys.L;
-        int keyMoveLeft = (miJugadorID == 1) ? Keys.A : Keys.J;
-        int keyJump = (miJugadorID == 1) ? Keys.W : Keys.I;
-        int keyFire = (miJugadorID == 1) ? Keys.SPACE : Keys.P;
-        
-        // Comando de Movimiento Horizontal
-        if (Gdx.input.isKeyPressed(keyMoveRight)) {
-            hc.enviarMensaje("MOV_D:1"); 
-        } else if (Gdx.input.isKeyPressed(keyMoveLeft)) {
-            hc.enviarMensaje("MOV_A:1"); 
-        } 
+	/**
+	 * Mapea las teclas de entrada del jugador local a comandos de red.
+	 */
+	private void manejarInput() {
+	    // Si no hay cliente o el juego no ha empezado, salir.
+	    if (hc == null || jugadorID == 0 || !Global.empieza) return; 
 
-        // Comando de Salto
-        if (Gdx.input.isKeyJustPressed(keyJump)) { 
-            hc.enviarMensaje("SALTAR:1"); 
-        }
-        
-        // Comando de Disparo
-		if(Gdx.input.isKeyJustPressed(keyFire)) {
-		    hc.enviarMensaje("DISPARAR:1"); 
-		}
+	    Pengu jugadorLocal = (jugadorID == 1) ? pengu : pengu2;
+
+	    // --- 1. Movimiento Horizontal ---
+	    boolean movDerecha = Gdx.input.isKeyPressed(Keys.D) || Gdx.input.isKeyPressed(Keys.RIGHT);
+	    boolean movIzquierda = Gdx.input.isKeyPressed(Keys.A) || Gdx.input.isKeyPressed(Keys.LEFT);
+	    
+	    // El cliente envía el comando CADA FRAME mientras la tecla esté presionada
+	    if (movDerecha) {
+	        hc.enviarMensaje("MOV_D_INICIO");
+	        jugadorLocal.setMirandoDerecha(true, jugadorID);
+	    } else if (movIzquierda) {
+	        hc.enviarMensaje("MOV_A_INICIO");
+	        jugadorLocal.setMirandoDerecha(false, jugadorID);
+	    } else {
+	        // Solo envía MOV_FIN si no hay teclas de movimiento presionadas
+	        hc.enviarMensaje("MOV_FIN");
+	    }
+
+	    // --- 2. Salto (Solo cuando la tecla es presionada por primera vez: justPressed) ---
+	    if (Gdx.input.isKeyJustPressed(Keys.W) || Gdx.input.isKeyJustPressed(Keys.UP)) {
+	        hc.enviarMensaje("SALTAR");
+	    }
+	    
+	    // --- 3. Disparo (Solo cuando la tecla es presionada por primera vez: justPressed) ---
+	    if (Gdx.input.isKeyJustPressed(Keys.SPACE)) {
+	        boolean mirandoDerecha = jugadorLocal.isMirandoDerecha(jugadorID);
+	        String direccion = mirandoDerecha ? "DERECHA" : "IZQUIERDA";
+	        hc.enviarMensaje("DISPARAR:" + direccion);
+	    }
 	}
+	
+	// ----------------------------------------------------------------------
+	// MÉTODOS PARA SER LLAMADOS POR HILO CLIENTE
+	// ----------------------------------------------------------------------
+
+    public void setJugadorID(int id) {
+        this.jugadorID = id;
+    }
     
     /**
-     * Método llamado por HiloCliente para actualizar el estado del juego.
-     * Formato esperado: ESTADO:P1X,P1Y:P2X,P2Y:V1,V2
+     * Procesa el mensaje ESTADO: y actualiza todos los elementos del juego.
      */
     public void actualizarEstadoServidor(String estadoMsg) {
-        String[] partes = estadoMsg.split(":"); 
-        if (partes.length < 4) return; 
+        
+        // 1. Limpiar el prefijo "ESTADO:"
+        String[] partes = estadoMsg.substring("ESTADO:".length()).split(":");
+        
+        // CORRECCIÓN CLAVE: El mensaje debe tener al menos 4 partes de datos (P1, P2, Vidas, Direcciones).
+        if (partes.length < 4) { 
+            System.err.println("Mensaje de ESTADO incompleto. (Partes insuficientes)");
+            return; 
+        }
 
         try {
-            // 1. Posiciones
-            String[] p1Pos = partes[1].split(",");
-            String[] p2Pos = partes[2].split(",");
+            // --- A. POSICIÓN Y VIDA ---
             
-            float newX1 = Float.parseFloat(p1Pos[0]);
-            float newX2 = Float.parseFloat(p2Pos[0]);
+            // P1: X,Y (partes[0])
+            String[] p1Pos = partes[0].split(",");
+            pengu.setX(Float.parseFloat(p1Pos[0]));
+            pengu.setY(Float.parseFloat(p1Pos[1]));
+            
+            // P2: X,Y (partes[1])
+            String[] p2Pos = partes[1].split(",");
+            pengu2.setX2(Float.parseFloat(p2Pos[0])); 
+            pengu2.setY2(Float.parseFloat(p2Pos[1]));
+            
+            // Vidas (partes[2])
+            String[] vidas = partes[2].split(",");
+            this.vida = Integer.parseInt(vidas[0]); // Vida J1
+            this.vida2 = Integer.parseInt(vidas[1]); // Vida J2
+            
+            // --- B. DIRECCIÓN DE LOS PERSONAJES (partes[3]) ---
+            String[] direcciones = partes[3].split(","); 
+            String dir1 = direcciones[0]; // "D" o "I"
+            String dir2 = direcciones[1]; // "D" o "I"
 
-            // 2. Vidas
-            String[] vidas = partes[3].split(",");
+            // Aplicar la dirección visual al Pengu (soluciona el problema del sprite flip)
+            pengu.setMirandoDerecha(dir1.equals("D"), 1);
+            pengu2.setMirandoDerecha(dir2.equals("D"), 2);
             
-            // --- APLICAR ESTADO ---
-            
-            // 3. Orientación (Flip) para J1
-            if (newX1 > lastReportedX1) {
-                pengu.setMirandoDerecha(true, 1);
-            } else if (newX1 < lastReportedX1) {
-                pengu.setMirandoDerecha(false, 1);
+            // --- C. BALAS (parte opcional: partes[4] si existe) ---
+            String balasData = "";
+            // Verificamos si la parte de la data de balas existe (índice 4)
+            if (partes.length > 4) {
+                 balasData = partes[4]; // Ahora leemos la data de balas en partes[4]
             }
-            lastReportedX1 = newX1;
-            
-            // 4. Orientación (Flip) para J2
-            if (newX2 > lastReportedX2) {
-                pengu2.setMirandoDerecha(true, 2);
-            } else if (newX2 < lastReportedX2) {
-                pengu2.setMirandoDerecha(false, 2);
+
+            Map<Integer, Bala> nuevasBalasMapa = new HashMap<>();
+
+            if (!balasData.isEmpty()) {
+                String[] balasArray = balasData.split(";");
+                for (String balaStr : balasArray) {
+                    String[] balaInfo = balaStr.split(",");
+                    if (balaInfo.length == 4) {
+                        int idBala = Integer.parseInt(balaInfo[0]);
+                        float x = Float.parseFloat(balaInfo[1]);
+                        float y = Float.parseFloat(balaInfo[2]);
+                        boolean dir = balaInfo[3].equals("D");
+                        
+                        Bala balaExistente = balasMapa.get(idBala);
+                        
+                        if (balaExistente == null) {
+                            // Nueva bala
+                            balaExistente = new Bala(idBala, x, y, dir);
+                            balas.add(balaExistente);
+                        }
+                        
+                        // Actualizar posición de la bala existente
+                        balaExistente.setX(x);
+                        balaExistente.setY(y);
+                        
+                        nuevasBalasMapa.put(idBala, balaExistente);
+                    }
+                }
             }
-            lastReportedX2 = newX2;
-
-            // 5. Aplicar a los personajes (esto sobrescribe la posición local)
-            pengu.setX(newX1); 
-            pengu.setY(Float.parseFloat(p1Pos[1])); 
-            pengu2.setX2(newX2); 
-            pengu2.setY2(Float.parseFloat(p2Pos[1])); 
             
-            vida = Integer.parseInt(vidas[0]);
-            vida2 = Integer.parseInt(vidas[1]);
-
+            // --- D. ELIMINAR BALAS ANTIGUAS ---
+            Array<Bala> aEliminar = new Array<>();
+            for(Bala b : balas) {
+                if (!nuevasBalasMapa.containsKey(b.getIdBala())) {
+                    aEliminar.add(b);
+                    b.dispose(); 
+                }
+            }
+            balas.removeAll(aEliminar, true);
+            balasMapa = nuevasBalasMapa; 
+            
+        } catch (NumberFormatException e) {
+            System.err.println("Error al convertir números flotantes/enteros: " + e.getMessage());
         } catch (Exception e) {
-            System.err.println("Error al parsear ESTADO del servidor: " + e.getMessage());
+            System.err.println("Error desconocido al parsear estado: " + e.getMessage());
         }
     }
-    
-    public void setJugadorID(int id) {
-        this.miJugadorID = id;
-    }
 	
+
 	@Override
 	public void resize(int width, int height) {}
 
@@ -196,10 +256,17 @@ public class PantallaJuego implements Screen {
 
 	@Override
 	public void dispose() {
-        if (hc != null) {
-            hc.detener();
-        }
+		// Detener el hilo cliente y cerrar el socket
+		if (hc != null) hc.detener();
+		
+		// Liberar objetos de balas
+		for (Bala b : balas) {
+		    b.dispose();
+		}
+		
+		// Liberar recurso del fondo de juego
+		if (fondo != null && fondo.t != null) {
+			fondo.t.dispose();
+		}
 	}
-
 }
-
