@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
 import elementos.Imagen;
 import utiles.Config;
 import utiles.Entradas;
+import utiles.Global;
 import utiles.Render;
 
 public class PantallaMenu implements Screen {
@@ -22,25 +23,30 @@ public class PantallaMenu implements Screen {
 	
 	@Override
 	public void show() {
-		fondo = new Imagen("FondoMenu.png");
-		fondo.setSize(Config.ANCHO, Config.ALTO);
-		logo = new Imagen("Logo.png");
-		logo.setSize(307, 204);
-		logo.setPosition(80, 550);
-		
-		t = new Config();
-		t.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
-		t2 = new Config();
-		t2.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
-		t3 = new Config();
-		t3.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
-		
-		TEST = new Config();
-		TEST.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
-		Gdx.input.setInputProcessor(new Entradas());
-		
-		sr = new ShapeRenderer();
-	
+		    // CORRECCIÓN: Usar las texturas pre-cargadas de Global
+		    fondo = new Imagen(Global.TEXTURA_FONDO_MENU); 
+		    fondo.setSize(Config.ANCHO, Config.ALTO);
+		    
+		    logo = new Imagen(Global.TEXTURA_LOGO);
+		    logo.setSize(307, 204);
+		    logo.setPosition(80, 550);
+		    
+		    t = new Config();
+		    t.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
+		    t = new Config();
+			t.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
+			t2 = new Config();
+			t2.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
+			t3 = new Config();
+			t3.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
+		    
+		    TEST = new Config();
+		    TEST.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
+		    Gdx.input.setInputProcessor(new Entradas());
+		    
+		    sr = new ShapeRenderer();
+
+
 	}
  
 	@Override
