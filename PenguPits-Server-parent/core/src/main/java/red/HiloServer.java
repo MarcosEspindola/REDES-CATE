@@ -52,13 +52,15 @@ public class HiloServer extends Thread {
     // Límite del mapa
     private final float LIMITE_DERECHO = 1100;
     private final float LIMITE_IZQUIERDO = 0;
+    
+    private int votosReinicio = 0;
  
     // -----------------------------------------------------------------
 	
 	public HiloServer() {
 		// Puerto 9013 (Sincronizado con HiloCliente.java)
 		try {
-			conexion = new DatagramSocket(9007); 
+			conexion = new DatagramSocket(9011); 
 			// CORRECCIÓN: Permite la reutilización rápida de la dirección (puerto)
 			conexion.setReuseAddress(true); 
 		} catch (SocketException e) {
@@ -311,11 +313,15 @@ public class HiloServer extends Thread {
             boolean golpea = false;
             
             // Colisión con J1 (si J2 disparó)
-            if (balaActual.getIdJugadorDano() == 2) {
+            // La ID del jugador que dispara se sigue obteniendo de getIdJugadorDano()
+            if (balaActual.getIdJugadorDano() == 2) { 
                 if (balaActual.getX() >= p1X && balaActual.getX() <= p1X + 100 &&
                     balaActual.getY() >= p1Y && balaActual.getY() <= p1Y + 210) {
                     p1Vida--;
                     golpea = true;
+                    
+                    // Opcional: Si usas el ID de la bala aquí, debe ser .getId()
+                    // System.out.println("Bala " + balaActual.getId() + " golpeó a Pingu 1");
                 }
             }
             
@@ -325,6 +331,9 @@ public class HiloServer extends Thread {
                     balaActual.getY() >= p2Y && balaActual.getY() <= p2Y + 210) {
                     p2Vida--;
                     golpea = true;
+                    
+                    // Opcional: Si usas el ID de la bala aquí, debe ser .getId()
+                    // System.out.println("Bala " + balaActual.getId() + " golpeó a Pingu 2");
                 }
             }
             
@@ -337,11 +346,14 @@ public class HiloServer extends Thread {
 
     private void sincronizarEstado() {
         // Serializar las balas: ID,X,Y,DERECHA;ID,X,Y,DERECHA;...
-        StringBuilder balasString = new StringBuilder();
+    	StringBuilder balasString = new StringBuilder();
         for (BalaServer b : balas) {
             String dir = b.isDerecha() ? "D" : "I";
-            // Formato: ID,X,Y,D/I;
-            balasString.append(String.format(Locale.US, "%d,%.2f,%.2f,%s;", b.getIdBala(), b.getX(), b.getY(), dir));
+            
+            // CÓDIGO CRÍTICO: CAMBIAR getIdBala() por getId()
+            // El método getId() ahora está heredado de RedAbstracta.
+            balasString.append(String.format(Locale.US, "%d,%.2f,%.2f,%s;", b.getId(), b.getX(), b.getY(), dir));
+            
         }
 
         // --- NUEVOS DATOS DE DIRECCIÓN ---
