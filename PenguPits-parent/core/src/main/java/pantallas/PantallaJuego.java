@@ -18,25 +18,26 @@ import utiles.Render;
 import java.util.HashMap;
 import java.util.Map;
 
+// PantallaJuego: Dibuja el escenario, lee las teclas y gestiona la red cliente.
 public class PantallaJuego implements Screen {
     
-    // CRÍTICO: Referencia estática para que PantallaFin acceda al hilo de red
+    // Referencia estática: Guardamos el hilo de red aquí para que la PantallaFin pueda cerrarlo.
     private static HiloCliente hiloClienteEstatico; 
     
 	Imagen fondo;
-	Hud hud;
-	Pengu pengu,pengu2; 
+	Hud hud; // La interfaz de vida.
+	Pengu pengu,pengu2; // Los dos personajes.
 	
-	private HiloCliente hc; 
-    private int jugadorID = 0; 
+	private HiloCliente hc; // El hilo de red que envía y recibe datos.
+    private int jugadorID = 0; // Nuestro ID (1 o 2), asignado por el servidor.
 
-    // Las vidas deben ser públicas para que HiloCliente pueda leerlas 
+    // Vidas: Son públicas para que el HiloCliente pueda leerlas y decidir si terminar el juego.
 	public int vida2 = 5; 
 	public int vida = 5;  
     
-	private Texture tFondo; // Textura del fondo de juego
-	private Array<Bala> balas = new Array<>(); 
-	private Map<Integer, Bala> balasMapa = new HashMap<>(); 
+	private Texture tFondo; 
+	private Array<Bala> balas = new Array<>(); // Lista de balas que vemos en pantalla.
+	private Map<Integer, Bala> balasMapa = new HashMap<>(); // Mapa auxiliar para buscar balas por su ID.
 	
 	Config t;
 	int piso = 120;
@@ -49,54 +50,53 @@ public class PantallaJuego implements Screen {
 		fondo.setSize(Config.ANCHO, Config.ALTO);
 		
 		hud = new Hud();
-		pengu = new Pengu(100, piso, 1); 
-		pengu2 = new Pengu(1000, piso, 2);
+		pengu = new Pengu(100, piso, 1); // Crea el personaje visual J1
+		pengu2 = new Pengu(1000, piso, 2); // Crea el personaje visual J2
 		
 		t = new Config();
 		t.Texto("Thunder-BoldLC.otf", 80, Color.WHITE);
 		
-		// ----------------------------------------------------------------------
-		// *** CORRECCIÓN CRÍTICA PARA EL REINICIO DE PARTIDA ***
-        // 1. Detener y limpiar cualquier hilo de red anterior
+		// 2. INICIALIZAR HILO CLIENTE Y CONECTAR
+        
+        // Si venimos de un reinicio, detenemos el hilo viejo para evitar errores.
         if (hiloClienteEstatico != null) {
-            System.out.println("Deteniendo hilo de red anterior para reinicio...");
-            hiloClienteEstatico.detener(); // Asegurar que el socket se cierre
+            hiloClienteEstatico.detener(); 
             hiloClienteEstatico = null;
         }
         
-		// 2. INICIALIZAR NUEVO HILO CLIENTE Y CONECTAR
-		hc = new HiloCliente(); 
-		hc.setPantallaJuego(this); 
-		hc.start();
+		hc = new HiloCliente(); // Creamos la nueva conexión
+		hc.setPantallaJuego(this); // Le decimos al hilo que actualice ESTA pantalla
+		hc.start(); // Iniciamos el hilo de red.
         
-        // ¡CRÍTICO! Guardar la referencia estática para PantallaFin
+        // Guardamos la referencia del hilo actual.
         hiloClienteEstatico = hc; 
-        // ----------------------------------------------------------------------
 	}
 
 	@Override
 	public void render(float delta) {
 		Render.limpiarPantalla();
 		
-	    manejarInput(); 
+	    manejarInput(); // Lee las teclas del jugador local.
 		
 		Render.batch.begin();
 		
 		if (!Global.empieza) {
+			// Si el servidor no ha dicho "Empieza", solo mostramos el fondo y el texto de espera.
 			fondo.dibujar();
 			t.dibujarTexto("Esperando Jugadores (ID: " + jugadorID + ")", 100, 100);
 		} else {
+			// El juego ya empezó:
 			fondo.dibujar();
 			
 			hud.actualizarHud(vida, vida2);
 			hud.dibujarHud();
 			
-			pengu.actualizar(1); 
-			pengu2.actualizar(2);
+			pengu.actualizar(1); // Dibuja y anima J1
+			pengu2.actualizar(2); // Dibuja y anima J2
 			
-			// Dibujar las balas
+			// Dibuja todas las balas recibidas de la red.
 			for (Bala b : balas) {
-			    b.actualizar(); 
+			    b.actualizar(); // Mueve el hitbox de la bala.
 			    b.dibujarBala();
 			}
 		}
@@ -104,7 +104,7 @@ public class PantallaJuego implements Screen {
 		Render.batch.end();
 	}
 	
-    // Método estático para que PantallaFin acceda al hilo de red
+    // Permite que la PantallaFin acceda al hilo de red para detenerlo/reiniciarlo.
     public static HiloCliente getHiloClienteEstatico() {
         return hiloClienteEstatico;
     }
@@ -113,40 +113,36 @@ public class PantallaJuego implements Screen {
 	 * Mapea las teclas de entrada del jugador local a comandos de red.
 	 */
 	private void manejarInput() {
+	    // Solo procesa si ya tenemos ID y el juego comenzó.
 	    if (hc == null || jugadorID == 0 || !Global.empieza) return; 
 
+	    // Usamos la referencia a nuestro propio personaje (J1 o J2)
 	    Pengu jugadorLocal = (jugadorID == 1) ? pengu : pengu2;
 
 	    // --- 1. Movimiento Horizontal ---
 	    boolean movDerecha = Gdx.input.isKeyPressed(Keys.D) || Gdx.input.isKeyPressed(Keys.RIGHT);
 	    boolean movIzquierda = Gdx.input.isKeyPressed(Keys.A) || Gdx.input.isKeyPressed(Keys.LEFT);
 	    
-	    // Evita enviar el comando MOV_FIN si ya se está enviando MOV_D o MOV_A
 	    if (movDerecha) {
-	        hc.enviarMensaje("MOV_D_INICIO");
+	        hc.enviarMensaje("MOV_D_INICIO"); // Manda comando para ir a la derecha
 	        jugadorLocal.setMirandoDerecha(true, jugadorID);
 	    } else if (movIzquierda) {
-	        hc.enviarMensaje("MOV_A_INICIO");
+	        hc.enviarMensaje("MOV_A_INICIO"); // Manda comando para ir a la izquierda
 	        jugadorLocal.setMirandoDerecha(false, jugadorID);
 	    } else {
-            // Asegura que solo envíe MOV_FIN una vez cuando se suelta la tecla
-            if (Gdx.input.isKeyJustPressed(Keys.D) || Gdx.input.isKeyJustPressed(Keys.RIGHT) || 
-                Gdx.input.isKeyJustPressed(Keys.A) || Gdx.input.isKeyJustPressed(Keys.LEFT)) {
-                // No enviamos MOV_FIN si se acaba de presionar una tecla de movimiento
-            } else {
-                // Aquí deberías tener una lógica para enviar MOV_FIN solo una vez al soltar
-                // Por ahora lo dejamos simple para evitar sobrecarga de red:
-                hc.enviarMensaje("MOV_FIN");
-            }
+            // Envía el comando para detener el movimiento horizontal.
+            // Nota: Esta lógica debería ser más fina para evitar spam de red.
+            hc.enviarMensaje("MOV_FIN"); 
 	    }
 
 	    // --- 2. Salto ---
 	    if (Gdx.input.isKeyJustPressed(Keys.W) || Gdx.input.isKeyJustPressed(Keys.UP)) {
-	        hc.enviarMensaje("SALTAR");
+	        hc.enviarMensaje("SALTAR"); // Manda el comando de salto
 	    }
 	    
 	    // --- 3. Disparo ---
 	    if (Gdx.input.isKeyJustPressed(Keys.SPACE)) {
+	        // Envía el comando DISPARAR + la dirección en la que estamos mirando.
 	        boolean mirandoDerecha = jugadorLocal.isMirandoDerecha(jugadorID);
 	        String direccion = mirandoDerecha ? "DERECHA" : "IZQUIERDA";
 	        hc.enviarMensaje("DISPARAR:" + direccion);
@@ -154,11 +150,11 @@ public class PantallaJuego implements Screen {
 	}
 	
 	// ----------------------------------------------------------------------
-	// MÉTODOS PARA SER LLAMADOS POR HILO CLIENTE
+	// MÉTODOS PARA SER LLAMADOS POR HILO CLIENTE (Actualización de la Red)
 	// ----------------------------------------------------------------------
 
     public void setJugadorID(int id) {
-        this.jugadorID = id;
+        this.jugadorID = id; // Asigna el ID que nos dio el servidor.
     }
     
     /**
@@ -169,33 +165,33 @@ public class PantallaJuego implements Screen {
         String[] partes = estadoMsg.substring("ESTADO:".length()).split(":");
         
         if (partes.length < 4) { 
-            System.err.println("Mensaje de ESTADO incompleto. (Partes insuficientes)");
+            System.err.println("Mensaje de ESTADO incompleto.");
             return; 
         }
 
         try {
             // A. POSICIÓN Y VIDA
             String[] p1Pos = partes[0].split(",");
-            pengu.setX(Float.parseFloat(p1Pos[0]));
+            pengu.setX(Float.parseFloat(p1Pos[0])); // Mueve J1
             pengu.setY(Float.parseFloat(p1Pos[1]));
             
             String[] p2Pos = partes[1].split(",");
-            pengu2.setX2(Float.parseFloat(p2Pos[0])); 
+            pengu2.setX2(Float.parseFloat(p2Pos[0])); // Mueve J2
             pengu2.setY2(Float.parseFloat(p2Pos[1]));
             
             String[] vidas = partes[2].split(",");
-            this.vida = Integer.parseInt(vidas[0]); 
-            this.vida2 = Integer.parseInt(vidas[1]); 
+            this.vida = Integer.parseInt(vidas[0]); // Actualiza vida J1
+            this.vida2 = Integer.parseInt(vidas[1]); // Actualiza vida J2
             
-            // B. DIRECCIÓN (parte[3])
+            // B. DIRECCIÓN
             String[] direcciones = partes[3].split(","); 
-            pengu.setMirandoDerecha(direcciones[0].equals("D"), 1);
-            pengu2.setMirandoDerecha(direcciones[1].equals("D"), 2);
+            pengu.setMirandoDerecha(direcciones[0].equals("D"), 1); // Gira J1
+            pengu2.setMirandoDerecha(direcciones[1].equals("D"), 2); // Gira J2
             
-            // C. BALAS (parte opcional: partes[4] si existe)
+            // C. BALAS
             String balasData = "";
             if (partes.length > 4) {
-                 balasData = partes[4]; 
+                 balasData = partes[4]; // Obtiene la cadena de datos de balas.
             }
 
             Map<Integer, Bala> nuevasBalasMapa = new HashMap<>();
@@ -213,10 +209,12 @@ public class PantallaJuego implements Screen {
                         Bala balaExistente = balasMapa.get(idBala);
                         
                         if (balaExistente == null) {
+                            // Si es una bala nueva, la creamos y la añadimos a la lista de dibujo.
                             balaExistente = new Bala(idBala, x, y, dir);
                             balas.add(balaExistente);
                         }
                         
+                        // Actualizamos su posición con los datos del servidor.
                         balaExistente.setX(x);
                         balaExistente.setY(y);
                         
@@ -225,16 +223,16 @@ public class PantallaJuego implements Screen {
                 }
             }
             
-            // D. ELIMINAR BALAS ANTIGUAS
+            // D. ELIMINAR BALAS ANTIGUAS (que ya no están en el servidor)
             Array<Bala> aEliminar = new Array<>();
             for(Bala b : balas) {
                 if (!nuevasBalasMapa.containsKey(b.getIdBala())) {
                     aEliminar.add(b);
-                    b.dispose(); 
+                    b.dispose(); // Liberamos los recursos visuales de esa bala.
                 }
             }
-            balas.removeAll(aEliminar, true);
-            balasMapa = nuevasBalasMapa; 
+            balas.removeAll(aEliminar, true); // Las quitamos de la lista de dibujo.
+            balasMapa = nuevasBalasMapa; // Actualizamos el mapa de balas activas.
             
         } catch (Exception e) {
             System.err.println("Error al parsear estado: " + e.getMessage());
@@ -256,18 +254,18 @@ public class PantallaJuego implements Screen {
 
 	@Override
 	public void dispose() {
-		// EL HiloCliente NO se detiene aquí, ya que debe sobrevivir para el reinicio.
+		// El HiloCliente NO se detiene aquí, ya que debe sobrevivir para el reinicio.
 		
-        // Liberar objetos de balas
+        // Liberar todos los objetos de balas.
 		for (Bala b : balas) {
 		    b.dispose();
 		}
         
-        // Liberar pingüinos
+        // Liberar personajes.
         if (pengu != null) pengu.dispose();
         if (pengu2 != null) pengu2.dispose();
 		
-		// Liberar recurso del fondo de juego
+		// Liberar la textura del fondo de juego.
 		if (tFondo != null) {
 			tFondo.dispose();
 		}

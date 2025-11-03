@@ -10,20 +10,25 @@ import pantallas.PantallaJuego;
 import pantallas.PantallaFin;
 import utiles.Global;
 
+// HiloCliente es como un cartero que trabaja en un hilo (Thread) separado
+// para que el juego principal no se congele mientras espera mensajes del servidor.
 public class HiloCliente extends Thread {
-	private DatagramSocket conexion;
-	private InetAddress ipServer;
-	// CORRECCIÓN: Sincronizar puerto con HiloServer (9013)
-	private int puerto = 9011; 
-	private boolean fin = false;
-	private PantallaJuego juego; // Referencia a la pantalla
 	
+	private DatagramSocket conexion; // El "teléfono" para enviar y recibir datos (UDP).
+	private InetAddress ipServer;      // La dirección IP de la "casa" del servidor.
+	private int puerto = 9015;         // El número de "puerta" (puerto) al que envía mensajes.
+	private boolean fin = false;       // Bandera para saber cuándo debe dejar de funcionar.
+	private PantallaJuego juego;       // Referencia a la pantalla del juego para actualizar cosas.
+	
+	// Constructor: Se ejecuta al crear el HiloCliente.
 	public HiloCliente() {
 		try {
+			// Intentamos encontrar la dirección del servidor (aquí es 'localhost' o 127.0.0.1).
 			ipServer = InetAddress.getByName("127.0.0.1"); 
-			conexion = new DatagramSocket();
+			conexion = new DatagramSocket(); // Abrimos la conexión.
             
-            // CORRECCIÓN: Establecer un timeout bajo para evitar el bloqueo indefinido.
+            // Le decimos al teléfono que si no llega un mensaje en 0.5 segundos, siga. 
+            // Esto evita que se bloquee la espera de mensajes.
             conexion.setSoTimeout(500); 
             
 		} catch (SocketException e) {
@@ -31,18 +36,21 @@ public class HiloCliente extends Thread {
 		} catch (UnknownHostException e) { 
 		    e.printStackTrace();
 		}
+		// Enviamos el primer mensaje para decirle al servidor que nos conectamos.
 		enviarMensaje("Conexion:CLIENTE");
 	}
 	
     /**
-     * Permite a PantallaJuego asignar la referencia para las actualizaciones
+     * Permite que la PantallaJuego se registre para recibir actualizaciones.
      */
     public void setPantallaJuego(PantallaJuego juego) {
         this.juego = juego;
     }
     
+	// Método para enviar mensajes (comandos) al servidor.
 	public void enviarMensaje(String msg) {
 		byte[] data = msg.getBytes();
+		// Creamos el paquete con el mensaje, la dirección del servidor y el puerto.
 		DatagramPacket dp = new DatagramPacket(data, data.length, ipServer, puerto);
 		try {
 			conexion.send(dp);
@@ -52,40 +60,43 @@ public class HiloCliente extends Thread {
 	}
 	
 	@Override
+	// El método 'run' es el trabajo principal del cartero.
 	public void run() {
 		do{
 			byte[] data = new byte [1024]; 
 			DatagramPacket dp = new DatagramPacket(data, data.length);
 			
 			try {
+				// Esperamos a recibir un paquete del servidor.
 				conexion.receive(dp);
 			} catch (IOException e) {
-				// El timeout (SocketTimeoutException) es esperado, no hacemos nada.
+				// Si hubo un timeout (el servidor no envió nada), lo ignoramos y seguimos.
 				if (!fin && !(e instanceof java.net.SocketTimeoutException)) { 
                     e.printStackTrace();
                 }
 			}
             
-            // Solo procesamos si recibimos datos (el timeout hace que dp.getLength() sea 0)
+            // Si recibimos algo real, lo procesamos.
             if (dp.getLength() > 0) {
 			    procesarMensaje(dp);	
             }
-		}while(!fin);
+		}while(!fin); // Repetimos mientras 'fin' sea falso.
         
-        // Cierre limpio de la conexión
+        // Cuando terminamos, cerramos la conexión de forma limpia.
         if (conexion != null && !conexion.isClosed()) {
             conexion.close();
         }
 	}
 	
+	// Método que analiza el mensaje recibido del servidor.
 	private void procesarMensaje(DatagramPacket dp) {
 	    String msg = new String(dp.getData(), 0, dp.getLength()).trim(); 
-	    String[] partes = msg.split(":");
+	    String[] partes = msg.split(":"); // Dividimos el mensaje por los dos puntos (:)
 	    
 	    System.out.println("Cliente recibió: " + msg);
 	    
 	    if(partes[0].equals("OK")) {
-	        // Asignación de ID al inicio de la conexión
+	        // El servidor nos asigna nuestro ID (Jugador 1 o 2).
 	        ipServer = dp.getAddress(); 
 	        if (partes.length > 1 && juego != null) {
 	            try {
@@ -95,44 +106,45 @@ public class HiloCliente extends Thread {
 	            }
 	        }
 	    } else if (msg.equals("Empieza")) {
+	        // La bandera 'Global.empieza' se activa para iniciar el juego.
 	        Global.empieza = true; 
 	    } else if (msg.startsWith("ESTADO:")) {
-	        // Ejecutamos actualizarEstadoServidor en el hilo seguro de LibGDX
+	        // Recibimos la posición de los jugadores, balas y vidas.
 	        if (juego != null) {
 	            final String estado = msg; 
+	            // CRÍTICO: Ejecutamos el cambio de pantalla en el hilo principal de LibGDX
 	            com.badlogic.gdx.Gdx.app.postRunnable(new Runnable() {
 	                @Override
 	                public void run() {
 	                    juego.actualizarEstadoServidor(estado);
 	                    
-	                    // Lógica para CAMBIAR A PANTALLAFIN al detectar vida 0
-	                    // Requiere que PantallaJuego.vida/vida2 sean públicas.
+	                    // Si la vida de cualquier jugador llega a cero, cambiamos a la pantalla de fin.
 	                    if (juego.vida <= 0 || juego.vida2 <= 0) { 
 	                        int ganador = (juego.vida > 0) ? 1 : 2; 
 	                        
-	                        // CORRECCIÓN FINAL: Se hace un casting explícito a (Game)
+	                        // Cambia la pantalla a PantallaFin
 	                        ((com.badlogic.gdx.Game)com.badlogic.gdx.Gdx.app.getApplicationListener()).setScreen(new PantallaFin(ganador)); 
 	                    }
 	                }
 	            });
 	        }
 	    } else if (msg.equals("INICIO_PARTIDA")) {
-	        // El servidor ha recibido los dos votos de reinicio
+	        // Si el servidor confirma el reinicio, volvemos a la pantalla de juego.
 	        com.badlogic.gdx.Gdx.app.postRunnable(new Runnable() {
 	            @Override
 	            public void run() {
-	                // Volver a cargar la pantalla de juego principal (nuevo juego)
+	                // Cargamos una nueva instancia de la PantallaJuego.
 	                ((com.badlogic.gdx.Game)com.badlogic.gdx.Gdx.app.getApplicationListener()).setScreen(new PantallaJuego()); 
 	            }
 	        });
 	    } else if (partes[0].equals("GANADOR")) {
-	        // Ignoramos este mensaje ya que la lógica de fin de juego se maneja en ESTADO:
+	        // Este es un mensaje redundante (el estado ya maneja el fin de juego).
 	        System.out.println("Fin del Juego detectado por mensaje GANADOR.");
 	    }
 	}
     
+    // Método llamado para detener este hilo de forma segura.
     public void detener() {
         this.fin = true;
-        // La conexión se cierra en el finally/al final del run
     }
 }
