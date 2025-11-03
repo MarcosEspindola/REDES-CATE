@@ -6,15 +6,15 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException; 
-
 import pantallas.PantallaJuego;
+import pantallas.PantallaFin;
 import utiles.Global;
 
 public class HiloCliente extends Thread {
 	private DatagramSocket conexion;
 	private InetAddress ipServer;
 	// CORRECCIÓN: Sincronizar puerto con HiloServer (9013)
-	private int puerto = 9007; 
+	private int puerto = 9011; 
 	private boolean fin = false;
 	private PantallaJuego juego; // Referencia a la pantalla
 	
@@ -97,31 +97,37 @@ public class HiloCliente extends Thread {
 	    } else if (msg.equals("Empieza")) {
 	        Global.empieza = true; 
 	    } else if (msg.startsWith("ESTADO:")) {
-	        // *** CORRECCIÓN CRÍTICA: Mover la actualización del estado al hilo de renderizado ***
+	        // Ejecutamos actualizarEstadoServidor en el hilo seguro de LibGDX
 	        if (juego != null) {
-	            final String estado = msg; // Necesitamos una variable final para usar en el Runnable
-
-	            // Ejecutamos actualizarEstadoServidor en el hilo seguro de LibGDX
+	            final String estado = msg; 
 	            com.badlogic.gdx.Gdx.app.postRunnable(new Runnable() {
 	                @Override
 	                public void run() {
 	                    juego.actualizarEstadoServidor(estado);
+	                    
+	                    // Lógica para CAMBIAR A PANTALLAFIN al detectar vida 0
+	                    // Requiere que PantallaJuego.vida/vida2 sean públicas.
+	                    if (juego.vida <= 0 || juego.vida2 <= 0) { 
+	                        int ganador = (juego.vida > 0) ? 1 : 2; 
+	                        
+	                        // CORRECCIÓN FINAL: Se hace un casting explícito a (Game)
+	                        ((com.badlogic.gdx.Game)com.badlogic.gdx.Gdx.app.getApplicationListener()).setScreen(new PantallaFin(ganador)); 
+	                    }
 	                }
 	            });
 	        }
+	    } else if (msg.equals("INICIO_PARTIDA")) {
+	        // El servidor ha recibido los dos votos de reinicio
+	        com.badlogic.gdx.Gdx.app.postRunnable(new Runnable() {
+	            @Override
+	            public void run() {
+	                // Volver a cargar la pantalla de juego principal (nuevo juego)
+	                ((com.badlogic.gdx.Game)com.badlogic.gdx.Gdx.app.getApplicationListener()).setScreen(new PantallaJuego()); 
+	            }
+	        });
 	    } else if (partes[0].equals("GANADOR")) {
-	        // El manejo del fin de juego también debe ser seguro
-	        if (juego != null && partes.length > 1) {
-	            final int idGanador = Integer.parseInt(partes[1]);
-
-	            com.badlogic.gdx.Gdx.app.postRunnable(new Runnable() {
-	                @Override
-	                public void run() {
-	                    System.out.println("Fin del Juego. El ganador es el Jugador " + idGanador);
-	                    // Lógica de PantallaFin o resultado va aquí
-	                }
-	            });
-	        }
+	        // Ignoramos este mensaje ya que la lógica de fin de juego se maneja en ESTADO:
+	        System.out.println("Fin del Juego detectado por mensaje GANADOR.");
 	    }
 	}
     
