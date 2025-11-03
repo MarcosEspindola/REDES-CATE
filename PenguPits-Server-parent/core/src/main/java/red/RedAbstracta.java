@@ -1,16 +1,17 @@
 package red;
 
-/**
- * Clase base abstracta para todas las entidades lógicas (servidor)
- * que tienen una posición (x, y) y una lógica de actualización.
- */
-public abstract class RedAbstracta { // <-- CRÍTICO: Debe ser 'abstract'
+// CLASE ABSTRACTA: Es un plano básico que no se usa directamente.
+// Simplemente obliga a todas las clases 'hijas' a tener la misma estructura.
+public abstract class RedAbstracta { 
     
+    // Posición X (horizontal) y Y (vertical) en el mundo del juego.
     protected float x;
     protected float y;
-    protected int id; // ID de la entidad (e.g., ID de bala, ID de jugador)
+    // Un número de identificación único (ID) para el objeto.
+    protected int id; 
 
-    // *** CORRECCIÓN CRÍTICA: El constructor debe ser PUBLIC ***
+    // Constructor: Este es el código que se ejecuta al crear cualquier objeto.
+    // Pide la posición inicial y su ID.
     public RedAbstracta(float x, float y, int id) { 
         this.x = x;
         this.y = y;
@@ -18,16 +19,17 @@ public abstract class RedAbstracta { // <-- CRÍTICO: Debe ser 'abstract'
     }
 
     // ----------------------------------------------------------------------
-    // MÉTODO ABSTRACTO (Obliga a la implementación)
+    // MÉTODO ABSTRACTO: El Contrato
     // ----------------------------------------------------------------------
     
     /**
-     * Define la lógica de actualización de posición, colisión o estado.
+     * Actualizar es un método obligatorio que cada objeto debe tener.
+     * Define cómo se mueve y calcula la lógica de colisión en el servidor.
      */
     public abstract void actualizar(float delta);
 
     // ----------------------------------------------------------------------
-    // MÉTODOS CONCRETOS (Implementación compartida)
+    // MÉTODOS COMPARTIDOS
     // ----------------------------------------------------------------------
     
     public float getX() { 
@@ -38,7 +40,6 @@ public abstract class RedAbstracta { // <-- CRÍTICO: Debe ser 'abstract'
         return y; 
     }
     
-    // Este método reemplaza al antiguo getIdBala()
     public int getId() { 
         return id; 
     }

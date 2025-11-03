@@ -9,59 +9,58 @@ import java.util.List;
 import java.util.ArrayList; 
 import java.util.Locale;
 
-import utiles.Global; // Asumiendo que esta clase existe
+import utiles.Global; // Clase con banderas y variables de estado global.
 
-// NOTA: Asume que 'DireccionRed' y 'BalaServer' son clases auxiliares correctas.
-
+// HiloServer es el "cerebro" y "juez" del juego. Corre sin parar en un hilo separado
+// para calcular la física y sincronizar a todos los jugadores.
 public class HiloServer extends Thread {
-	private DatagramSocket conexion;
-	private boolean fin = false;
+	private DatagramSocket conexion; // El "teléfono" para enviar y recibir datos (UDP).
+	private boolean fin = false;    // Bandera para detener el servidor de forma segura.
 	
-    // Estructura para almacenar las direcciones de los clientes
+    // Estructura para saber dónde encontrar a los dos clientes (su IP y Puerto).
 	private DireccionRed[] clientes = new DireccionRed[2]; 
-	private int cantClientes = 0;
+	private int cantClientes = 0; // Contador de jugadores conectados.
     
     // --- ESTADO DEL JUEGO GESTIONADO POR EL SERVIDOR ---
-    private List<BalaServer> balas = new ArrayList<>(); 
-    private int nextBalaID = 1; 
+    private List<BalaServer> balas = new ArrayList<>(); // Todas las balas activas en el juego.
+    private int nextBalaID = 1; // Contador para dar un ID único a cada bala nueva.
     
-    // Posición de los Jugadores
+    // Posición y Vidas de los Jugadores
     private float p1X = 100, p1Y = 120; 
     private float p2X = 1000, p2Y = 120; 
-    
-    // Vidas
     private int p1Vida = 5;
     private int p2Vida = 5;
     
-    // Mirando Derecha
+    // Dirección del sprite (necesario para el cliente)
     private boolean p1MirandoDerecha = true;
     private boolean p2MirandoDerecha = false;
     
-    // Constantes para simulación de física en el servidor
-    private final float VELOCIDAD_MOVIMIENTO = 100; // Velocidad de movimiento horizontal
-    private final float IMPULSO_SALTO = 200; 
-    private final float GRAVEDAD = -120;  
-    private final float POSICION_PISO = 120;
+    // Constantes de la Física
+    private final float VELOCIDAD_MOVIMIENTO = 100; // Velocidad horizontal al caminar.
+    private final float IMPULSO_SALTO = 200;       // Fuerza que recibe el pingüino al saltar.
+    private final float GRAVEDAD = -120;           // La fuerza que siempre tira hacia abajo.
+    private final float POSICION_PISO = 120;       // Altura del suelo.
     
-    // Variables para simular la física (CRÍTICO: Velocidad X añadida)
-    private float p1VelocidadY = 0;
+    // Variables de Física Aplicada (cambian constantemente)
+    private float p1VelocidadY = 0; // Velocidad vertical (subir/bajar).
     private float p2VelocidadY = 0;
-    private float p1VelocidadX = 0; 
+    private float p1VelocidadX = 0; // Velocidad horizontal (caminar).
     private float p2VelocidadX = 0; 
     
-    // Límite del mapa
+    // Límites del área de juego
     private final float LIMITE_DERECHO = 1100;
     private final float LIMITE_IZQUIERDO = 0;
     
-    private int votosReinicio = 0;
+    private int votosReinicio = 0; // Contador para la opción "Jugar de nuevo".
  
     // -----------------------------------------------------------------
 	
+	// Constructor: Configura el socket del servidor.
 	public HiloServer() {
-		// Puerto 9013 (Sincronizado con HiloCliente.java)
 		try {
-			conexion = new DatagramSocket(9011); 
-			// CORRECCIÓN: Permite la reutilización rápida de la dirección (puerto)
+			// Abre el puerto para escuchar (9012).
+			conexion = new DatagramSocket(9015); 
+			// Permite que el puerto se libere inmediatamente al cerrar, evitando errores.
 			conexion.setReuseAddress(true); 
 		} catch (SocketException e) {
 			e.printStackTrace();
@@ -69,6 +68,7 @@ public class HiloServer extends Thread {
 		}
 	}
     
+	// Envía un mensaje a una dirección y puerto específicos.
 	private void enviarMensaje(String msg, InetAddress ip, int puerto) {
 		byte[] data = msg.getBytes();
 		DatagramPacket dp = new DatagramPacket(data, data.length, ip, puerto);
@@ -84,115 +84,107 @@ public class HiloServer extends Thread {
 	}
 	
 	@Override
+	// El bucle principal del servidor (el juez).
 	public void run() {
 	    if (conexion == null) {
 	        System.err.println("ERROR: El socket del servidor no se pudo crear. Terminando HiloServer.");
 	        return; 
 	    }
 	    
-	    // Tasa de Simulación de la Física (MÁS IMPORTANTE QUE EL RENDERING)
-	    // 60 Ticks por segundo: la física se actualizará cada 16.67ms.
-	    final float S_POR_TICK = 1f / 60f; // 0.01667 segundos por tick
+	    // Definimos que la física se calcula 60 veces por segundo (1/60s).
+	    final float S_POR_TICK = 1f / 60f; 
 	    
 	    float acumuladorTiempo = 0;
 	    long lastTime = System.currentTimeMillis();
 	    
 	    do {
 	        long now = System.currentTimeMillis();
-	        // Delta (tiempo real transcurrido entre este frame y el anterior)
-	        float delta = (now - lastTime) / 1000f; // Delta en segundos
+	        // Calculamos el tiempo real que pasó desde la última vez que revisamos.
+	        float delta = (now - lastTime) / 1000f; 
 	        lastTime = now;
 	        
-	        // El acumulador guarda el tiempo que ha pasado desde el último tick de física
 	        acumuladorTiempo += delta;
 	        
 	        // -----------------------------------------------------------------
-	        // 1. LECTURA DE COMANDOS (ALTA FRECUENCIA / NO BLOQUEANTE)
+	        // 1. LECTURA DE COMANDOS
 	        // -----------------------------------------------------------------
 	        byte[] data = new byte [1024];
 	        DatagramPacket dp = new DatagramPacket(data, data.length);
 	        
 	        try {
-	            // setSoTimeout(1) asegura que solo esperamos 1ms, priorizando la lectura
+	            // Esperamos solo 1ms para recibir un comando del cliente antes de seguir.
 	            conexion.setSoTimeout(1); 
 	            conexion.receive(dp); 
 	            
 	            if (dp.getLength() > 0) {
-	                procesarMensaje(dp); // El comando se procesa INMEDIATAMENTE
+	                procesarMensaje(dp); // Analizamos el comando inmediatamente.
 	            }
 	        } catch (IOException e) {
-	            // El timeout (SocketTimeoutException) es esperado, no lo imprimimos.
-	            if (!fin && !(e instanceof java.net.SocketTimeoutException)) {
-	                e.printStackTrace();
-	            }
+	            // El tiempo de espera ha expirado, no es un error real.
 	        }
 	        
 	        // -----------------------------------------------------------------
-	        // 2. BUCLE DE PASO DE TIEMPO FIJO (Fixed Timestep)
+	        // 2. BUCLE DE FÍSICA Y SINCRONIZACIÓN (Paso de Tiempo Fijo)
 	        // -----------------------------------------------------------------
 	        
-	        // Mientras el tiempo acumulado sea mayor que el tiempo de un tick de física
+	        // Esto asegura que la física se calcule 60 veces por segundo, sin importar el lag.
 	        while (acumuladorTiempo >= S_POR_TICK) {
 	            
-	            // A. APLICAR FÍSICA Y JUEGO (Usando el S_POR_TICK fijo)
+	            // A. Aplicamos las reglas de física y movemos todos los objetos.
 	            aplicarFisica(S_POR_TICK); 
 	            actualizarBalas(S_POR_TICK); 
 	            
-	            // B. SINCRONIZAR ESTADO (Enviar las nuevas posiciones)
+	            // B. Enviamos el nuevo estado (posiciones y vidas) a todos los clientes.
 	            sincronizarEstado();
 	            
-	            // C. Consumir el tiempo
+	            // C. Restamos el tiempo del tick que acabamos de procesar.
 	            acumuladorTiempo -= S_POR_TICK;
 	        }
 	        
 	        // -----------------------------------------------------------------
-	        // 3. CÓDIGO FINAL (CEDER CPU)
+	        // 3. CEDER CPU
 	        // -----------------------------------------------------------------
 	        
-	        // Como eliminamos el Thread.sleep(16), agregamos un micro-sleep de 1ms.
-	        // Esto evita que el bucle consuma el 100% de la CPU al ceder el control
-	        // brevemente a otros hilos/procesos del sistema operativo.
+	        // Pequeña pausa para evitar usar el 100% de la CPU.
 	        try {
 	            Thread.sleep(1); 
 	        } catch (InterruptedException e) {
 	            Thread.currentThread().interrupt();
 	        }
 
-	    } while (!fin);
+	    } while (!fin); // El servidor corre hasta que alguien llame a detener().
 	    
 	    if (conexion != null && !conexion.isClosed()) {
 	        conexion.close();
 	    }
 	}
     
-    // --- CORRECCIÓN DE LA FÍSICA Y MOVIMIENTO ---
+    // --- LÓGICA DE FÍSICA ---
     private void aplicarFisica(float delta) {
         
         // J1: Aplicar velocidad, gravedad y límites
-        p1X += p1VelocidadX * delta; // <--- Aplica la velocidad horizontal
-        p1Y += p1VelocidadY * delta; 
-        p1VelocidadY += GRAVEDAD * delta;
+        p1X += p1VelocidadX * delta; // Mueve horizontalmente
+        p1Y += p1VelocidadY * delta; // Mueve verticalmente
+        p1VelocidadY += GRAVEDAD * delta; // Aplica gravedad constante
         
-        // Comprobar límites X
+        // Comprobar límites X (para que no salga del mapa)
         if (p1X < LIMITE_IZQUIERDO) p1X = LIMITE_IZQUIERDO;
         if (p1X > LIMITE_DERECHO) p1X = LIMITE_DERECHO;
 
-        // Comprobar límites Y (Piso)
+        // Comprobar límites Y (si toca el piso, se detiene la caída)
         if (p1Y <= POSICION_PISO) {
             p1Y = POSICION_PISO;
             p1VelocidadY = 0;
         } 
         
-        // J2: Aplicar velocidad, gravedad y límites
-        p2X += p2VelocidadX * delta; // <--- Aplica la velocidad horizontal
+        // J2: Aplicar velocidad, gravedad y límites (igual que J1)
+        p2X += p2VelocidadX * delta; 
         p2Y += p2VelocidadY * delta;
         p2VelocidadY += GRAVEDAD * delta;
         
-        // Comprobar límites X
         if (p2X < LIMITE_IZQUIERDO) p2X = LIMITE_IZQUIERDO;
         if (p2X > LIMITE_DERECHO) p2X = LIMITE_DERECHO;
 
-        // Comprobar límites Y (Piso)
         if (p2Y <= POSICION_PISO) {
             p2Y = POSICION_PISO;
             p2VelocidadY = 0;
@@ -205,7 +197,7 @@ public class HiloServer extends Thread {
         InetAddress remitenteIP = dp.getAddress();
         int remitentePuerto = dp.getPort();
         
-        // Determinar el ID del jugador
+        // 1. Identificar al jugador que envió el mensaje.
         int jugadorID = 0;
         if (clientes[0] != null && clientes[0].getIp().equals(remitenteIP) && clientes[0].getPuerto() == remitentePuerto) {
             jugadorID = 1;
@@ -213,13 +205,15 @@ public class HiloServer extends Thread {
             jugadorID = 2;
         }
         
-        // Manejo de Conexión Inicial y Comandos de Juego
+        // 2. Manejar Conexión o Comandos
         if(partes[0].equalsIgnoreCase("conexion")){
             if(cantClientes < clientes.length) { 
+                // Acepta un nuevo cliente, le da su ID (1 o 2) y lo saluda.
                 clientes[cantClientes] = new DireccionRed(dp.getAddress(), dp.getPort());
                 enviarMensaje("OK:" + (cantClientes + 1), clientes[cantClientes].getIp(), clientes[cantClientes].getPuerto());
                 cantClientes++; 
                 if (cantClientes == clientes.length) {
+                    // Si ya hay 2 clientes, inicia el juego para todos.
                     Global.empieza = true;
                     for (int i = 0; i < clientes.length; i++) {
                         enviarMensaje("Empieza", clientes[i].getIp(), clientes[i].getPuerto());
@@ -231,40 +225,40 @@ public class HiloServer extends Thread {
         } 
         else if (Global.empieza && jugadorID != 0) { 
             
+            // Analiza el comando de juego enviado por el cliente.
             String comando = partes[0];
             String direccion = (partes.length > 1) ? partes[1] : ""; 
 
             switch(comando) {
                 case "MOV_D_INICIO":
                     setVelocidadHorizontal(jugadorID, VELOCIDAD_MOVIMIENTO);
-                    // ¡CRÍTICO! Sincronizar la dirección del jugador
                     if (jugadorID == 1) p1MirandoDerecha = true;
                     else p2MirandoDerecha = true;
                     break;
                 case "MOV_A_INICIO":
                     setVelocidadHorizontal(jugadorID, -VELOCIDAD_MOVIMIENTO);
-                    // ¡CRÍTICO! Sincronizar la dirección del jugador
                     if (jugadorID == 1) p1MirandoDerecha = false;
                     else p2MirandoDerecha = false;
                     break;
-                case "MOV_FIN": // Comando para detener el movimiento
-                    setVelocidadHorizontal(jugadorID, 0);
+                case "MOV_FIN": 
+                    setVelocidadHorizontal(jugadorID, 0); // Frena el movimiento horizontal.
                     break;
                 case "SALTAR":
                     manejarSalto(jugadorID);
                     break;
                 case "DISPARAR":
-                    manejarDisparo(jugadorID, direccion); 
+                    manejarDisparo(jugadorID, direccion); // Llama a la lógica para crear una bala.
                     break;
                 case "RESET":
-                    p1Vida = 5;
+                    p1Vida = 5; // Resetea las vidas (usado para debugging).
                     p2Vida = 5;
                     break;
             }
         }
     }
     
-    // --- NUEVO MÉTODO PARA ESTABLECER LA VELOCIDAD ---
+    // --- MÉTODOS AUXILIARES ---
+    
     private void setVelocidadHorizontal(int jugadorID, float velocidad) {
         if (jugadorID == 1) {
             p1VelocidadX = velocidad;
@@ -277,6 +271,7 @@ public class HiloServer extends Thread {
         float y = (jugadorID == 1) ? p1Y : p2Y;
         float velY = (jugadorID == 1) ? p1VelocidadY : p2VelocidadY;
         
+        // Solo permite saltar si está tocando el piso.
         if (y <= POSICION_PISO) {
             velY = IMPULSO_SALTO;
             if (jugadorID == 1) { p1VelocidadY = velY; } else { p2VelocidadY = velY; }
@@ -286,7 +281,7 @@ public class HiloServer extends Thread {
     private void manejarDisparo(int jugadorID, String direccion) {
         if (p1Vida <= 0 || p2Vida <= 0) return;
         
-        // 1. Calcular posición inicial 
+        // 1. Calcular dónde debe aparecer la bala.
         float startX = (jugadorID == 1) ? p1X : p2X;
         float startY = (jugadorID == 1) ? p1Y : p2Y;
         
@@ -299,80 +294,71 @@ public class HiloServer extends Thread {
         }
         startY += 100;
         
-        // 2. Crear la bala lógica
+        // 2. Crea la bala y le da un ID único.
         BalaServer nuevaBala = new BalaServer(startX, startY, isDerecha, nextBalaID++, jugadorID);
         balas.add(nuevaBala);
     }
     
+    // Lógica para mover las balas y comprobar si golpearon a alguien.
     private void actualizarBalas(float delta) {
         for (int i = balas.size() - 1; i >= 0; i--) {
             BalaServer balaActual = balas.get(i);
             balaActual.actualizar(delta);
             
-            // 1. VERIFICACIÓN DE COLISIÓN Y LÍMITES
             boolean golpea = false;
             
-            // Colisión con J1 (si J2 disparó)
-            // La ID del jugador que dispara se sigue obteniendo de getIdJugadorDano()
+            // Colisión con J1
             if (balaActual.getIdJugadorDano() == 2) { 
+                // Comprobación simple de colisión de área.
                 if (balaActual.getX() >= p1X && balaActual.getX() <= p1X + 100 &&
                     balaActual.getY() >= p1Y && balaActual.getY() <= p1Y + 210) {
                     p1Vida--;
                     golpea = true;
-                    
-                    // Opcional: Si usas el ID de la bala aquí, debe ser .getId()
-                    // System.out.println("Bala " + balaActual.getId() + " golpeó a Pingu 1");
                 }
             }
             
-            // Colisión con J2 (si J1 disparó)
+            // Colisión con J2
             if (balaActual.getIdJugadorDano() == 1) {
                 if (balaActual.getX() >= p2X && balaActual.getX() <= p2X + 100 &&
                     balaActual.getY() >= p2Y && balaActual.getY() <= p2Y + 210) {
                     p2Vida--;
                     golpea = true;
-                    
-                    // Opcional: Si usas el ID de la bala aquí, debe ser .getId()
-                    // System.out.println("Bala " + balaActual.getId() + " golpeó a Pingu 2");
                 }
             }
             
-            // 2. Eliminación
+            // 2. Eliminación (si salió del mapa o golpeó a un jugador)
             if (balaActual.debeEliminarse() || golpea) {
                 balas.remove(i);
             }
         }
     }
 
+    // Crea el mensaje que contiene todas las posiciones y estados para los clientes.
     private void sincronizarEstado() {
-        // Serializar las balas: ID,X,Y,DERECHA;ID,X,Y,DERECHA;...
+        // 1. Serializar las balas: Las convierte de objetos a una cadena de texto.
     	StringBuilder balasString = new StringBuilder();
         for (BalaServer b : balas) {
             String dir = b.isDerecha() ? "D" : "I";
-            
-            // CÓDIGO CRÍTICO: CAMBIAR getIdBala() por getId()
-            // El método getId() ahora está heredado de RedAbstracta.
+            // Formato de la bala: ID,X,Y,DIRECCIÓN;
             balasString.append(String.format(Locale.US, "%d,%.2f,%.2f,%s;", b.getId(), b.getX(), b.getY(), dir));
             
         }
 
-        // --- NUEVOS DATOS DE DIRECCIÓN ---
-        // Determinamos si cada jugador está mirando a la derecha (D) o a la izquierda (I)
+        // 2. Dirección de los pingüinos (para que el cliente haga el "flip").
         String dir1 = p1MirandoDerecha ? "D" : "I";
         String dir2 = p2MirandoDerecha ? "D" : "I";
 
-        // Formato final (¡CRÍTICO! El cliente debe esperar este nuevo formato):
-        // ESTADO:P1X,P1Y:P2X,P2Y:V1,V2:D1,D2:BALAS:DATA
+        // 3. Formato del mensaje completo (ESTADO:P1:P2:Vidas:Direcciones:BALAS:Data)
         String estadoMsg = String.format(Locale.US, 
                                         "ESTADO:%.2f,%.2f:%.2f,%.2f:%d,%d:%s,%s:%s", 
                                         p1X, p1Y, p2X, p2Y, p1Vida, p2Vida, dir1, dir2, balasString.toString());
         
-        // Envío del mensaje de estado a todos los clientes
+        // 4. Envío: Manda el estado a todos los clientes.
         for (int i = 0; i < cantClientes; i++) {
             enviarMensaje(estadoMsg, clientes[i].getIp(), clientes[i].getPuerto());
         }
         
-        // Lógica de Fin de Juego (el servidor es el único que la maneja)
+        // 5. Lógica de Fin de Juego: Si alguien se queda sin vida, avisa que hay un ganador.
         if (p1Vida <= 0) {
             for (int i = 0; i < clientes.length; i++) {
                 enviarMensaje("GANADOR:2", clientes[i].getIp(), clientes[i].getPuerto());
@@ -390,4 +376,4 @@ public class HiloServer extends Thread {
 	        conexion.close(); 
 	    }
 	}
-}  
+}
